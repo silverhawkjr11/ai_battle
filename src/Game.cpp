@@ -5,6 +5,7 @@
 #include <iostream>
 #include <queue>
 #include <unordered_map>
+#include <Visibility.h>
 
 namespace
 {
@@ -203,18 +204,27 @@ void Game::step()
 {
     bullets.update(grid);
 
-    if (tick > 5000)
-    {
+    if (tick % 100 == 0) {  // Print every 100 ticks
+        std::cout << "=== TICK " << tick << " ===\n";
+    }
+
+    if (tick > 5000) {
+        std::cout << "Game timeout!\n";
         running = false;
         return;
     }
 
     // --- תנועה אוטומטית (A*) ---
-    moveWarriors(grid, blue, orange);
-    moveWarriors(grid, orange, blue);
+    //moveWarriors(grid, blue, orange);
+    //moveWarriors(grid, orange, blue);
 
     auto spotsForBlue = enemySpots(Team::Blue);
     auto spotsForOrange = enemySpots(Team::Orange);
+    CommanderAI::step(grid, blue.commander, blue.warriors,
+        blue.medic, blue.porter, spotsForBlue);
+
+    CommanderAI::step(grid, orange.commander, orange.warriors,
+        orange.medic, orange.porter, spotsForOrange);
 
     //---------------------------------------------
  //    GRENADE UPDATE + EXPLOSION DAMAGE
@@ -326,6 +336,106 @@ void Game::step()
                 }
             }
         }
+    }
+    // ----------------- Commander shooting (when warriors are dead) -----------------
+
+// Blue commander combat
+    if (blue.commander.alive) {
+        int blueWarriorsAlive = 0;
+        for (auto& w : blue.warriors) if (w.alive) blueWarriorsAlive++;
+
+        if (blueWarriorsAlive == 0) {
+            Perception per;
+            // Commander uses same vision as warrior
+            for (auto e : spotsForBlue) {
+                if (los(grid, blue.commander.pos, e)) {
+                    per.seesEnemy = true;
+                    per.enemyPos = e;
+                    break;
+                }
+            }
+
+            if (per.seesEnemy && blue.commander.ammo > 0) {
+                IVec2 targetPos = *per.enemyPos;
+                int dist = manhattan(blue.commander.pos, targetPos);
+
+                if (dist <= FIRE_RANGE) {
+                    blue.commander.ammo--;
+                    bullets.addBullet(
+                        blue.commander.pos.x + 0.5f, blue.commander.pos.y + 0.5f,
+                        targetPos.x + 0.5f, targetPos.y + 0.5f);
+
+                    Agent* victim = findAgentAt(Team::Orange, targetPos);
+                    if (victim) {
+                        victim->takeDamage(FIRE_DAMAGE);
+                        std::cout << "💥 Blue COMMANDER hit Orange "
+                            << victim->role << " hp=" << victim->hp << "\n";
+                    }
+                }
+            }
+        }
+    }
+
+    // Orange commander combat
+    if (orange.commander.alive) {
+        int orangeWarriorsAlive = 0;
+        for (auto& w : orange.warriors) if (w.alive) orangeWarriorsAlive++;
+
+        if (orangeWarriorsAlive == 0) {
+            Perception per;
+            for (auto e : spotsForOrange) {
+                if (los(grid, orange.commander.pos, e)) {
+                    per.seesEnemy = true;
+                    per.enemyPos = e;
+                    break;
+                }
+            }
+
+            if (per.seesEnemy && orange.commander.ammo > 0) {
+                IVec2 targetPos = *per.enemyPos;
+                int dist = manhattan(orange.commander.pos, targetPos);
+
+                if (dist <= FIRE_RANGE) {
+                    orange.commander.ammo--;
+                    bullets.addBullet(
+                        orange.commander.pos.x + 0.5f, orange.commander.pos.y + 0.5f,
+                        targetPos.x + 0.5f, targetPos.y + 0.5f);
+
+                    Agent* victim = findAgentAt(Team::Blue, targetPos);
+                    if (victim) {
+                        victim->takeDamage(FIRE_DAMAGE);
+                        std::cout << "💥 Orange COMMANDER hit Blue "
+                            << victim->role << " hp=" << victim->hp << "\n";
+                    }
+                }
+            }
+        }
+    }
+    if (tick % 50 == 0) {  // Every 50 ticks
+        int blueAlive = 0, orangeAlive = 0;
+        for (auto& w : blue.warriors) if (w.alive) blueAlive++;
+        for (auto& w : orange.warriors) if (w.alive) orangeAlive++;
+
+        std::cout << "Blue: " << blueAlive << " alive | Orange: " << orangeAlive << " alive\n";
+    }
+
+    // Count warriors only (not commander)
+    int blueWarriors = 0, orangeWarriors = 0;
+    for (auto& w : blue.warriors)
+        if (w.alive) blueWarriors++;
+    for (auto& w : orange.warriors)
+        if (w.alive) orangeWarriors++;
+
+    // Check if commanders are alive - COMMANDER DEATH = GAME OVER
+    if (!blue.commander.alive) {
+        std::cout << "\n🏆🏆🏆 ORANGE TEAM WINS! 🏆🏆🏆\n";
+        std::cout << "Blue Commander eliminated!\n";
+        running = false;
+    }
+    else if (!orange.commander.alive) {
+        std::cout << "\n🏆🏆🏆 BLUE TEAM WINS! 🏆🏆🏆\n";
+        std::cout << "Orange Commander eliminated!\n";
+        running = false;
     }
 
     tick++;

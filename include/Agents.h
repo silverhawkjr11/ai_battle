@@ -48,6 +48,10 @@ struct Warrior : Agent {
 };
 
 struct Medic : Agent {
+    enum class State { Idle, GoingToDepot, GoingToPatient, Healing };
+    State state{ State::Idle };
+    IVec2 targetPatient{ -1, -1 };
+
     Medic(Team t, IVec2 p) : Agent(t, p, 'M', "Medic") {}
 };
 
