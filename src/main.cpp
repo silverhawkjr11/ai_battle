@@ -1,8 +1,14 @@
 #include "Game.h" 
 #include "Renderer.h" 
+#include "Logger.h"
 #include <iostream>
 
+// Global logger instance
+Logger* g_logger = nullptr;
+
 int main(int argc, char* argv[]){
+    // Initialize logger
+    g_logger = new Logger("game_log.txt");
     // Configuration selection
     GameConfig config;
     
@@ -53,5 +59,11 @@ int main(int argc, char* argv[]){
 #else
     runGraphics(game);
 #endif
+    
+    // Cleanup logger
+    std::cout << "\nGame log saved to: game_log.txt" << std::endl;
+    delete g_logger;
+    g_logger = nullptr;
+    
     return 0;
 }

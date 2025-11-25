@@ -8,6 +8,20 @@
 #include <vector>
 #include <optional>
 #include <string>
+#include <fstream>
+
+// Global log file for detailed debugging
+extern std::ofstream g_logFile;
+
+// Log helper function
+inline void LogAgent(const std::string& agentType, Team team, IVec2 pos, const std::string& action, const std::string& details = "") {
+    if (g_logFile.is_open()) {
+        g_logFile << "[" << (team == Team::Blue ? "BLUE" : "ORANGE") << " " << agentType << " @(" 
+                  << pos.x << "," << pos.y << ")] " << action;
+        if (!details.empty()) g_logFile << " - " << details;
+        g_logFile << std::endl;
+    }
+}
 
 struct TeamState {
     Commander commander;
@@ -40,6 +54,7 @@ struct Game {
     Game(const Grid& g, const GameConfig& config = GameConfig::Balanced());
 
     void step();
+    void logDetailedState();
 
     std::vector<IVec2> enemySpots(Team t) const;
     Agent* findAgentAt(Team t, IVec2 p);

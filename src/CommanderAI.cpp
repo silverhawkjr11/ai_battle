@@ -141,52 +141,64 @@ void CommanderAI::step(const Grid& g,
     // ========================================
     bool porterBusy = false;
 
+    // First pass: Find warriors that are COMPLETELY out of ammo (priority)
+    Warrior* urgentWarrior = nullptr;
     for (auto& w : warriors)
     {
-        if (!w.alive || porterBusy) continue;
+        if (!w.alive || w.incapacitated) continue;
+        if ((w.ammo == 0 && w.grenades == 0) && (tick - w.lastResupplyTick) >= kPorterCooldown) {
+            urgentWarrior = &w;
+            break; // Found urgent case
+        }
+    }
 
-        // Request resupply if low on ammo OR out of grenades
-        if ((w.ammo < kLowAmmo || w.grenades == 0) && port.alive)
+    // Second pass: If no urgent case, check for low ammo
+    if (!urgentWarrior) {
+        for (auto& w : warriors)
         {
-            // COOLDOWN: Can only resupply every kPorterCooldown ticks (prevents spam)
-            if ((tick - w.lastResupplyTick) < kPorterCooldown) {
-                continue; // Too soon, skip this warrior
-            }
-
-            IVec2 depot = (c.team == Team::Blue ? g.blueAmmo : g.orangeAmmo);
-            int distToDepot = port.pos.manhattan(depot);
-            int distToWarrior = port.pos.manhattan(w.pos);
-
-            // If near depot (within 10 tiles), can resupply from long distance (50 tiles)
-            if (distToDepot <= 10 && distToWarrior <= 50)
-            {
-                w.ammo = 20;  // Full resupply
-                w.grenades = 2;
-                w.lastResupplyTick = tick; // Mark resupply time
-                porterBusy = true;
-                std::cout << "🔫 Porter resupplied " << teamName(c.team) 
-                          << " warrior at tick " << tick << " (next at " << (tick + kPorterCooldown) << ")\n";
+            if (!w.alive || w.incapacitated) continue;
+            bool needsResupply = (w.ammo == 0 || w.grenades == 0) || (w.ammo < kLowAmmo);
+            if (needsResupply && (tick - w.lastResupplyTick) >= kPorterCooldown) {
+                urgentWarrior = &w;
                 break;
             }
-            // Move toward depot to get supplies
-            else if (distToDepot > 5)
-            {
-                auto path = aStarPath(g, port.pos, depot, risk, 0.3f);
-                if (path.size() > 1) {
-                    port.pos = path[1];
-                    porterBusy = true;
-                }
+        }
+    }
+
+    // Execute resupply mission if we found a warrior
+    if (urgentWarrior && port.alive)
+    {
+        IVec2 depot = (c.team == Team::Blue ? g.blueAmmo : g.orangeAmmo);
+        int distToDepot = port.pos.manhattan(depot);
+        int distToWarrior = port.pos.manhattan(urgentWarrior->pos);
+
+        // If near depot (within 10 tiles), can resupply from long distance (50 tiles)
+        if (distToDepot <= 10 && distToWarrior <= 50)
+        {
+            urgentWarrior->ammo = 20;  // Full resupply
+            urgentWarrior->grenades = 2;
+            urgentWarrior->lastResupplyTick = tick; // Mark resupply time
+            porterBusy = true;
+            std::cout << "🔫 Porter resupplied " << teamName(c.team) 
+                      << " warrior at tick " << tick << " (next at " << (tick + kPorterCooldown) << ")\n";
+        }
+        // Move toward depot to get supplies
+        else if (distToDepot > 5)
+        {
+            auto path = aStarPath(g, port.pos, depot, risk, 0.3f);
+            if (path.size() > 1) {
+                port.pos = path[1];
+                porterBusy = true;
             }
-            // At depot, move toward warrior
-            else
-            {
-                auto path = aStarPath(g, port.pos, w.pos, risk, 0.3f);
-                if (path.size() > 1) {
-                    port.pos = path[1];
-                    porterBusy = true;
-                }
+        }
+        // At depot, move toward warrior
+        else
+        {
+            auto path = aStarPath(g, port.pos, urgentWarrior->pos, risk, 0.3f);
+            if (path.size() > 1) {
+                port.pos = path[1];
+                porterBusy = true;
             }
-            break;
         }
     }
 
@@ -201,7 +213,7 @@ void CommanderAI::step(const Grid& g,
     
     for (auto& w : warriors)
     {
-        if (!w.alive) continue;
+        if (!w.alive || w.incapacitated) continue; // Skip dead and incapacitated warriors
 
         float currentRisk = riskAt(risk, g, w.pos);
         
@@ -259,11 +271,12 @@ void CommanderAI::step(const Grid& g,
             // Advance logic:
             // - Keep advancing if far away (>9)
             // - OR if we're out of grenades and not yet in gun range
-            // - OR if totally out of ammo (both bullets and grenades)
-            bool needToCloseIn = (w.grenades == 0 && closestEnemyDist > kGunRange);
+            // - BUT NOT if totally out of ammo (hold position and wait for resupply)
+            bool needToCloseIn = (w.grenades == 0 && closestEnemyDist > kGunRange && w.ammo > 0);
             bool totallyOutOfAmmo = (w.ammo == 0 && w.grenades == 0);
             // Change: Advance if distance > kGrenadeRange (10) OR if out of grenades and not in gun range
-            bool shouldAdvance = (w.hp > 25) && ((closestEnemyDist > kGrenadeRange) || needToCloseIn || totallyOutOfAmmo);
+            // BUT: Don't advance if totally out of ammo - stay put and wait for resupply
+            bool shouldAdvance = (w.hp > 25) && !totallyOutOfAmmo && ((closestEnemyDist > kGrenadeRange) || needToCloseIn);
             
             if (tick % 500 == 0) {
                 std::cout << "[MOVE] " << teamName(c.team) << " warrior at (" << w.pos.x << "," << w.pos.y << ")"

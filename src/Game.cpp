@@ -12,7 +12,20 @@
 #include <iostream>
 #include <queue>
 #include <unordered_map>
+#include <fstream>
+
+// Global log file for detailed debugging
+std::ofstream g_logFile;
 #include <Visibility.h>
+
+// Helper to log to both console and file
+void Log(const std::string& msg) {
+    std::cout << msg << std::endl;
+    if (g_logFile.is_open()) {
+        g_logFile << msg << std::endl;
+        g_logFile.flush();
+    }
+}
 
 namespace
 {
@@ -179,6 +192,19 @@ Game::Game(const Grid& g, const GameConfig& config)
         IVec2{ g.w - 3, g.h - 4 },
         IVec2{ g.w - 3, g.h - 6 })
 {
+    // Open log file
+    g_logFile.open("game_debug.log");
+    if (g_logFile.is_open()) {
+        g_logFile << "=== GAME DEBUG LOG ===" << std::endl;
+        g_logFile << "Configuration: Blue(+" << config.blueExtraHP << " HP, +" 
+                  << config.blueExtraAmmo << " Ammo, +" << config.blueExtraGrenades 
+                  << " Grenades)" << std::endl;
+        g_logFile << "Configuration: Orange(+" << config.orangeExtraHP << " HP, +" 
+                  << config.orangeExtraAmmo << " Ammo, +" << config.orangeExtraGrenades 
+                  << " Grenades)" << std::endl;
+        g_logFile << std::endl;
+    }
+    
     // Apply configuration to Blue team
     for (auto& w : blue.warriors) {
         w.hp = kMaxHP + config.blueExtraHP;
@@ -469,5 +495,62 @@ void Game::step()
         running = false;
     }
 
+    // Log detailed agent states every 100 ticks
+    if (tick % 100 == 0) {
+        logDetailedState();
+    }
+
     tick++;
+}
+
+void Game::logDetailedState()
+{
+    std::ofstream logFile("game_log.txt", std::ios::app);
+    if (!logFile.is_open()) return;
+
+    logFile << "\n========== TICK " << tick << " ==========\n";
+    
+    // Log Blue team
+    logFile << "\n--- BLUE TEAM ---\n";
+    logFile << "Commander: pos=(" << blue.commander.pos.x << "," << blue.commander.pos.y 
+            << ") HP=" << blue.commander.hp << " alive=" << blue.commander.alive << "\n";
+    logFile << "Medic: pos=(" << blue.medic.pos.x << "," << blue.medic.pos.y 
+            << ") HP=" << blue.medic.hp << " alive=" << blue.medic.alive 
+            << " state=" << (int)blue.medic.state << "\n";
+    logFile << "Porter: pos=(" << blue.porter.pos.x << "," << blue.porter.pos.y 
+            << ") HP=" << blue.porter.hp << " alive=" << blue.porter.alive << "\n";
+    
+    for (int i = 0; i < blue.warriors.size(); i++) {
+        auto& w = blue.warriors[i];
+        logFile << "Warrior" << i << ": pos=(" << w.pos.x << "," << w.pos.y 
+                << ") HP=" << w.hp << " Ammo=" << w.ammo << " Grenades=" << w.grenades 
+                << " alive=" << w.alive;
+        if (w.path.size() > 0) {
+            logFile << " pathLen=" << w.path.size();
+        }
+        logFile << "\n";
+    }
+    
+    // Log Orange team
+    logFile << "\n--- ORANGE TEAM ---\n";
+    logFile << "Commander: pos=(" << orange.commander.pos.x << "," << orange.commander.pos.y 
+            << ") HP=" << orange.commander.hp << " alive=" << orange.commander.alive << "\n";
+    logFile << "Medic: pos=(" << orange.medic.pos.x << "," << orange.medic.pos.y 
+            << ") HP=" << orange.medic.hp << " alive=" << orange.medic.alive 
+            << " state=" << (int)orange.medic.state << "\n";
+    logFile << "Porter: pos=(" << orange.porter.pos.x << "," << orange.porter.pos.y 
+            << ") HP=" << orange.porter.hp << " alive=" << orange.porter.alive << "\n";
+    
+    for (int i = 0; i < orange.warriors.size(); i++) {
+        auto& w = orange.warriors[i];
+        logFile << "Warrior" << i << ": pos=(" << w.pos.x << "," << w.pos.y 
+                << ") HP=" << w.hp << " Ammo=" << w.ammo << " Grenades=" << w.grenades 
+                << " alive=" << w.alive;
+        if (w.path.size() > 0) {
+            logFile << " pathLen=" << w.path.size();
+        }
+        logFile << "\n";
+    }
+    
+    logFile.close();
 }
