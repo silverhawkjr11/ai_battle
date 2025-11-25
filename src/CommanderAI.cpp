@@ -216,6 +216,7 @@ void CommanderAI::step(const Grid& g,
     // ========================================
     // 3. WARRIOR TACTICAL MOVEMENT
     // ========================================
+    bool forceCommanderFocus = tick >= kForceCommanderFocusTick; // NEW
     // Warriors decide: Defend (if low HP/high risk) OR Advance (if healthy) OR Hold position (in combat range)
     
     static int moveLogCounter = 0;
@@ -228,19 +229,28 @@ void CommanderAI::step(const Grid& g,
 
         float currentRisk = riskAt(risk, g, w.pos);
         
-        // Check if we're in combat range of an enemy
+        // If forcing commander focus, override enemySpots to just commander
+        std::vector<IVec2> focusSpots = enemySpots;
+        if (forceCommanderFocus) {
+            focusSpots.clear();
+            // Push enemy commander position if known
+            if (!enemySpots.empty()) {
+                // enemySpots originally includes commander first if alive
+                focusSpots.push_back(enemySpots.front());
+            }
+        }
+        
         bool inCombatRange = false;
         int closestEnemyDist = 9999;
         IVec2 closestEnemy;
 
-        for (auto enemy : enemySpots) {
+        for (auto enemy : focusSpots) {
             int dist = w.pos.manhattan(enemy);
             if (dist < closestEnemyDist) {
                 closestEnemyDist = dist;
                 closestEnemy = enemy;
             }
             bool hasLOS = los(g, w.pos, enemy);
-            // Only hold position if ACTUALLY within gun range (can shoot)
             if (dist <= kGunRange && hasLOS) {
                 inCombatRange = true;
             }
@@ -343,7 +353,8 @@ void CommanderAI::step(const Grid& g,
     // Commander combines all soldiers' visibility
     c.visibilityMap.clear();
     for (auto& w : warriors) {
-        if (w.alive) {
+        // Include warriors even if incapacitated so commander tracks them
+        if (w.alive || w.incapacitated) {
             c.visibilityMap.push_back(w.pos);
         }
     }

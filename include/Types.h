@@ -50,6 +50,12 @@ constexpr int  kLowAmmo = 5;              // Low ammo threshold
 constexpr int  kSafeSearchRadius = 8;
 constexpr float kMaxSafeRisk = 0.25f;
 constexpr int  kPorterCooldown = 50;  // Ticks between resupplies
+// NEW: Force aggression after this tick regardless of remaining enemy warriors
+constexpr int  kForceCommanderFocusTick = 600;
+// NEW: Limit number of revives per warrior to avoid infinite loops
+constexpr int  kMaxWarriorRevives = 1;
+// NEW: Limit number of resupplies per warrior to avoid infinite sustain
+constexpr int  kMaxResuppliesPerWarrior = 6;
 
 // Game configuration
 struct GameConfig {

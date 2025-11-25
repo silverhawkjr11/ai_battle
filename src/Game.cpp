@@ -229,7 +229,7 @@ std::vector<IVec2> Game::enemySpots(Team t) const
     if (en.medic.alive)     v.push_back(en.medic.pos);
     if (en.porter.alive)    v.push_back(en.porter.pos);
     for (auto const& w : en.warriors)
-        if (w.alive) v.push_back(w.pos);
+        if (w.alive || w.incapacitated) v.push_back(w.pos); // include incapacitated
 
     return v;
 }
@@ -242,7 +242,7 @@ Agent* Game::findAgentAt(Team t, IVec2 p)
     if (ts.medic.alive && ts.medic.pos == p) return &ts.medic;
     if (ts.porter.alive && ts.porter.pos == p) return &ts.porter;
     for (auto& w : ts.warriors)
-        if (w.alive && w.pos == p) return &w;
+        if ((w.alive || w.incapacitated) && w.pos == p) return &w; // allow targeting incapacitated
 
     return nullptr;
 }
@@ -250,6 +250,9 @@ Agent* Game::findAgentAt(Team t, IVec2 p)
 void Game::step()
 {
     bullets.update(grid);
+
+    // Per-tick granular position logging
+    logPositionsTick();
 
     if (tick % 500 == 0) {  // Print every 500 ticks
         std::cout << "\n=== TICK " << tick << " ===\n";
@@ -315,7 +318,7 @@ void Game::step()
     int blueShotsThisTurn = 0;
     for (auto& w : blue.warriors)
     {
-        if (!w.alive) continue;
+        if ((!w.alive && !w.incapacitated) || w.incapacitated) continue; // skip incapacitated for shooting
 
         Perception per = w.look(grid, spotsForBlue);
         
@@ -357,7 +360,7 @@ void Game::step()
     int orangeShotsThisTurn = 0;
     for (auto& w : orange.warriors)
     {
-        if (!w.alive) continue;
+        if ((!w.alive && !w.incapacitated) || w.incapacitated) continue; // skip incapacitated for shooting
 
         Perception per = w.look(grid, spotsForOrange);
         
@@ -411,9 +414,9 @@ void Game::step()
     // Count warriors only (not commander)
     int blueWarriors = 0, orangeWarriors = 0;
     for (auto& w : blue.warriors)
-        if (w.alive) blueWarriors++;
+        if (w.alive || w.incapacitated) blueWarriors++; // count incapacitated
     for (auto& w : orange.warriors)
-        if (w.alive) orangeWarriors++;
+        if (w.alive || w.incapacitated) orangeWarriors++;
 
     // Check win conditions:
     // 1. Commander death = immediate loss
@@ -425,8 +428,8 @@ void Game::step()
     
     // Calculate total HP for both teams
     int currentBlueHP = 0, currentOrangeHP = 0;
-    for (auto& w : blue.warriors) if (w.alive) currentBlueHP += w.hp;
-    for (auto& w : orange.warriors) if (w.alive) currentOrangeHP += w.hp;
+    for (auto& w : blue.warriors) if (w.alive || w.incapacitated) currentBlueHP += w.hp;
+    for (auto& w : orange.warriors) if (w.alive || w.incapacitated) currentOrangeHP += w.hp;
     
     // Check if anything changed
     if (blueWarriors == lastBlueWarriors && orangeWarriors == lastOrangeWarriors &&
@@ -508,49 +511,42 @@ void Game::logDetailedState()
     std::ofstream logFile("game_log.txt", std::ios::app);
     if (!logFile.is_open()) return;
 
-    logFile << "\n========== TICK " << tick << " ==========\n";
+    logFile << "\n========== TICK " << tick << " ==========" << '\n';
     
-    // Log Blue team
-    logFile << "\n--- BLUE TEAM ---\n";
-    logFile << "Commander: pos=(" << blue.commander.pos.x << "," << blue.commander.pos.y 
-            << ") HP=" << blue.commander.hp << " alive=" << blue.commander.alive << "\n";
-    logFile << "Medic: pos=(" << blue.medic.pos.x << "," << blue.medic.pos.y 
-            << ") HP=" << blue.medic.hp << " alive=" << blue.medic.alive 
-            << " state=" << (int)blue.medic.state << "\n";
-    logFile << "Porter: pos=(" << blue.porter.pos.x << "," << blue.porter.pos.y 
-            << ") HP=" << blue.porter.hp << " alive=" << blue.porter.alive << "\n";
-    
-    for (int i = 0; i < blue.warriors.size(); i++) {
-        auto& w = blue.warriors[i];
-        logFile << "Warrior" << i << ": pos=(" << w.pos.x << "," << w.pos.y 
-                << ") HP=" << w.hp << " Ammo=" << w.ammo << " Grenades=" << w.grenades 
-                << " alive=" << w.alive;
-        if (w.path.size() > 0) {
-            logFile << " pathLen=" << w.path.size();
+    auto logTeam = [&](const TeamState& ts){
+        logFile << "TEAM " << teamName(ts.team) << '\n';
+        logFile << " Commander: pos=(" << ts.commander.pos.x << "," << ts.commander.pos.y << ") HP=" << ts.commander.hp << " alive=" << ts.commander.alive << '\n';
+        logFile << " Medic: pos=(" << ts.medic.pos.x << "," << ts.medic.pos.y << ") HP=" << ts.medic.hp << " alive=" << ts.medic.alive << " state=" << (int)ts.medic.state << '\n';
+        logFile << " Porter: pos=(" << ts.porter.pos.x << "," << ts.porter.pos.y << ") HP=" << ts.porter.hp << " alive=" << ts.porter.alive << '\n';
+        for (size_t i=0;i<ts.warriors.size();++i){
+            const auto& w = ts.warriors[i];
+            logFile << " Warrior" << i << ": pos=(" << w.pos.x << "," << w.pos.y << ") HP=" << w.hp
+                    << " Ammo=" << w.ammo << " Grenades=" << w.grenades
+                    << " alive=" << w.alive << " inc=" << w.incapacitated
+                    << " revives=" << w.reviveCount << " resupplies=" << w.resupplyCount << '\n';
         }
-        logFile << "\n";
-    }
-    
-    // Log Orange team
-    logFile << "\n--- ORANGE TEAM ---\n";
-    logFile << "Commander: pos=(" << orange.commander.pos.x << "," << orange.commander.pos.y 
-            << ") HP=" << orange.commander.hp << " alive=" << orange.commander.alive << "\n";
-    logFile << "Medic: pos=(" << orange.medic.pos.x << "," << orange.medic.pos.y 
-            << ") HP=" << orange.medic.hp << " alive=" << orange.medic.alive 
-            << " state=" << (int)orange.medic.state << "\n";
-    logFile << "Porter: pos=(" << orange.porter.pos.x << "," << orange.porter.pos.y 
-            << ") HP=" << orange.porter.hp << " alive=" << orange.porter.alive << "\n";
-    
-    for (int i = 0; i < orange.warriors.size(); i++) {
-        auto& w = orange.warriors[i];
-        logFile << "Warrior" << i << ": pos=(" << w.pos.x << "," << w.pos.y 
-                << ") HP=" << w.hp << " Ammo=" << w.ammo << " Grenades=" << w.grenades 
-                << " alive=" << w.alive;
-        if (w.path.size() > 0) {
-            logFile << " pathLen=" << w.path.size();
-        }
-        logFile << "\n";
-    }
+    };
+    logTeam(blue);
+    logTeam(orange);
     
     logFile.close();
+}
+
+void Game::logPositionsTick()
+{
+    if (!g_logFile.is_open()) return;
+    g_logFile << "T" << tick << ":";
+    auto logTeam = [&](const TeamState& ts){
+        g_logFile << (ts.team == Team::Blue ? " B" : " O") << "[C(" << ts.commander.pos.x << "," << ts.commander.pos.y << ")";
+        g_logFile << ";M(" << ts.medic.pos.x << "," << ts.medic.pos.y << ")";
+        g_logFile << ";P(" << ts.porter.pos.x << "," << ts.porter.pos.y << ")";
+        for (size_t i=0;i<ts.warriors.size();++i){
+            const auto& w = ts.warriors[i];
+            g_logFile << ";W" << i << "(" << w.pos.x << "," << w.pos.y << ")" << "hp=" << w.hp << (w.incapacitated?"*":"");
+        }
+        g_logFile << "]";
+    };
+    logTeam(blue);
+    logTeam(orange);
+    g_logFile << '\n';
 }

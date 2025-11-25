@@ -55,6 +55,7 @@ struct Game {
 
     void step();
     void logDetailedState();
+    void logPositionsTick(); // NEW: log every agent position each tick (high granularity)
 
     std::vector<IVec2> enemySpots(Team t) const;
     Agent* findAgentAt(Team t, IVec2 p);

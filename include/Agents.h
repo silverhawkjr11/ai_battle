@@ -28,17 +28,19 @@ struct Agent {
     virtual ~Agent() = default;
     virtual void update(const Grid&) {}
 
-    void takeDamage(int dmg) {
+    // Base damage handling: non-warriors are removed from play when HP drops to 0.
+    // Warriors override this to remain on the field (incapacitated but still "alive" for rendering/medic).
+    virtual void takeDamage(int dmg) {
         if (!alive) return;
         hp -= dmg;
         if (hp <= 0) {
             hp = 0;
-            incapacitated = true; // Knocked out but can be revived by medic
-            alive = false;         // Remove from active play until revived
+            incapacitated = true;
+            alive = false; // default behavior for non-revivable agents
         }
     }
 
-    void revive(int healAmount) {
+    virtual void revive(int healAmount) {
         if (!incapacitated) return; // Only knocked-out agents can be revived
         hp = healAmount;
         if (hp > 0) {
@@ -51,11 +53,41 @@ struct Agent {
 struct Warrior : Agent {
     std::vector<IVec2> path;
     int pathIndex{ 0 };
+    int reviveCount{ 0 };          // NEW: track number of revives
+    int resupplyCount{ 0 };        // NEW: track number of resupplies
 
     Warrior(Team t, IVec2 p)
         : Agent(t, p, 'W', "Warrior") {
         ammo = 20;
         grenades = 2;
+    }
+
+    // Override: keep warrior on field when incapacitated so medic can revive.
+    void takeDamage(int dmg) override {
+        if (!alive && !incapacitated) return;
+        hp -= dmg;
+        if (hp <= 0) {
+            hp = 0;
+            incapacitated = true;
+            // stay "alive" visually
+        }
+    }
+
+    void revive(int healAmount) override {
+        if (!incapacitated) return;
+        if (reviveCount >= kMaxWarriorRevives) {
+            // Exceeded revive limit: convert to permanently dead
+            alive = false;
+            incapacitated = false;
+            hp = 0;
+            return;
+        }
+        reviveCount++;
+        hp = healAmount;
+        if (hp > 0) {
+            incapacitated = false;
+            alive = true;
+        }
     }
 
     Perception look(const Grid& g,
