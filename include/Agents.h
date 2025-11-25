@@ -19,6 +19,8 @@ struct Agent {
     int         ammo{ 0 };
     int         grenades{ 0 };
     bool        alive{ true };
+    bool        incapacitated{ false }; // At 0 HP but can be revived
+    int         lastResupplyTick{ -999 }; // Track when last resupplied
 
     Agent(Team t, IVec2 p, char g, const char* r)
         : team(t), pos(p), glyph(g), role(r) {}
@@ -29,7 +31,19 @@ struct Agent {
     void takeDamage(int dmg) {
         if (!alive) return;
         hp -= dmg;
-        if (hp <= 0) { hp = 0; alive = false; }
+        if (hp <= 0) { 
+            hp = 0; 
+            incapacitated = true; // Can be revived by medic
+            // Don't set alive = false yet - medic can still revive
+        }
+    }
+    
+    void revive(int healAmount) {
+        if (!alive) return; // Truly dead agents can't be revived
+        hp = healAmount;
+        if (hp > 0) {
+            incapacitated = false;
+        }
     }
 };
 
@@ -60,5 +74,10 @@ struct Porter : Agent {
 };
 
 struct Commander : Agent {
-    Commander(Team t, IVec2 p) : Agent(t, p, 'C', "Commander") {}
+    std::vector<IVec2> visibilityMap;
+    
+    Commander(Team t, IVec2 p) : Agent(t, p, 'C', "Commander") {
+        ammo = 0;      // Commander cannot attack per requirements
+        grenades = 0;
+    }
 };

@@ -1,4 +1,12 @@
-﻿#include "CommanderAI.h"
+﻿// CommanderAI.cpp - AI commander decision making
+// Implements:
+// - Healing coordination (medic dispatch)
+// - Resupply coordination (porter dispatch)  
+// - Tactical positioning (defend/advance)
+// - Commander safety management
+// - Visibility map construction
+
+#include "CommanderAI.h"
 #include <algorithm>
 #include <iostream>
 
@@ -7,7 +15,8 @@ void CommanderAI::step(const Grid& g,
     std::vector<Warrior>& warriors,
     Medic& med,
     Porter& port,
-    const std::vector<IVec2>& enemySpots)
+    const std::vector<IVec2>& enemySpots,
+    int tick)
 {
     if (!c.alive) return;
 
@@ -20,12 +29,20 @@ void CommanderAI::step(const Grid& g,
     // If medic is already busy, skip
     if (med.alive && med.state == Medic::State::Idle)
     {
-        // Find most injured warrior
+        // Find most injured warrior that needs healing (including incapacitated ones at 0 HP)
         Warrior* targetWarrior = nullptr;
-        int lowestHP = 40;
+        int lowestHP = kMedCallHP;  // Only heal if below 60 HP
 
         for (auto& w : warriors)
         {
+            // Check incapacitated warriors first (HP = 0) - PRIORITY!
+            if (w.alive && w.incapacitated) {
+                targetWarrior = &w;
+                lowestHP = 0;
+                break; // Reviving is top priority
+            }
+            
+            // Otherwise check injured warriors
             if (!w.alive) continue;
             if (w.hp < lowestHP) {
                 lowestHP = w.hp;
@@ -38,7 +55,7 @@ void CommanderAI::step(const Grid& g,
         {
             med.state = Medic::State::GoingToDepot;
             med.targetPatient = targetWarrior->pos;
-            std::cout << "[MEDIC] Starting healing mission!\n";
+            std::cout << "[MEDIC] " << teamName(c.team) << " dispatching medic (warrior HP=" << lowestHP << ")\n";
         }
     }
 
@@ -53,7 +70,6 @@ void CommanderAI::step(const Grid& g,
             if (med.pos == depot)
             {
                 med.state = Medic::State::GoingToPatient;
-                std::cout << "[MEDIC] Reached depot, now going to patient\n";
             }
             else
             {
@@ -66,21 +82,25 @@ void CommanderAI::step(const Grid& g,
 
         case Medic::State::GoingToPatient:
         {
-            // Find the warrior we're trying to heal
+            // Find the warrior that needs healing (closest injured one)
             Warrior* patient = nullptr;
+            int minDist = 9999;
+            
             for (auto& w : warriors)
             {
-                if (w.pos == med.targetPatient) {
+                if (!w.alive || w.hp >= 60) continue;
+                
+                int dist = med.pos.manhattan(w.pos);
+                if (dist < minDist) {
+                    minDist = dist;
                     patient = &w;
-                    break;
                 }
             }
 
-            if (!patient || !patient->alive)
+            if (!patient)
             {
-                // Patient died or moved, abort mission
+                // No injured warriors found, abort mission
                 med.state = Medic::State::Idle;
-                std::cout << "[MEDIC] Patient lost, returning to idle\n";
                 break;
             }
 
@@ -89,8 +109,15 @@ void CommanderAI::step(const Grid& g,
             {
                 // Start healing
                 med.state = Medic::State::Healing;
-                patient->hp = 100;
-                std::cout << "[MEDIC] Healed warrior to HP=100!\n";
+                if (patient->incapacitated) {
+                    // Revive incapacitated warrior
+                    patient->revive(100);
+                    std::cout << "[MEDIC] REVIVED " << teamName(c.team) << " warrior from 0 HP to 100 HP!\n";
+                } else {
+                    // Regular healing
+                    patient->hp = 100;
+                    std::cout << "[MEDIC] Healed " << teamName(c.team) << " warrior to HP=100!\n";
+                }
             }
             else
             {
@@ -105,13 +132,12 @@ void CommanderAI::step(const Grid& g,
         case Medic::State::Healing:
             // Healing complete, go idle
             med.state = Medic::State::Idle;
-            std::cout << "[MEDIC] Mission complete, going idle\n";
             break;
         }
     }
 
     // ========================================
-    // 2. RESUPPLY - Check ALL warriors
+    // 2. RESUPPLY - Check ALL warriors  
     // ========================================
     bool porterBusy = false;
 
@@ -119,58 +145,87 @@ void CommanderAI::step(const Grid& g,
     {
         if (!w.alive || porterBusy) continue;
 
-        if (w.ammo < 5 && port.alive)
+        // Request resupply if low on ammo OR out of grenades
+        if ((w.ammo < kLowAmmo || w.grenades == 0) && port.alive)
         {
-            IVec2 depot = (c.team == Team::Blue ? g.blueAmmo : g.orangeAmmo);
+            // COOLDOWN: Can only resupply every kPorterCooldown ticks (prevents spam)
+            if ((tick - w.lastResupplyTick) < kPorterCooldown) {
+                continue; // Too soon, skip this warrior
+            }
 
-            // Go to depot first
-            if (port.pos != depot)
+            IVec2 depot = (c.team == Team::Blue ? g.blueAmmo : g.orangeAmmo);
+            int distToDepot = port.pos.manhattan(depot);
+            int distToWarrior = port.pos.manhattan(w.pos);
+
+            // If near depot (within 10 tiles), can resupply from long distance (50 tiles)
+            if (distToDepot <= 10 && distToWarrior <= 50)
+            {
+                w.ammo = 20;  // Full resupply
+                w.grenades = 2;
+                w.lastResupplyTick = tick; // Mark resupply time
+                porterBusy = true;
+                std::cout << "🔫 Porter resupplied " << teamName(c.team) 
+                          << " warrior at tick " << tick << " (next at " << (tick + kPorterCooldown) << ")\n";
+                break;
+            }
+            // Move toward depot to get supplies
+            else if (distToDepot > 5)
             {
                 auto path = aStarPath(g, port.pos, depot, risk, 0.3f);
                 if (path.size() > 1) {
                     port.pos = path[1];
                     porterBusy = true;
-                    std::cout << "📦 Porter (" << teamName(c.team)
-                        << ") moving to depot\n";
                 }
             }
-            // Then go to warrior
-            else if (port.pos != w.pos)
+            // At depot, move toward warrior
+            else
             {
                 auto path = aStarPath(g, port.pos, w.pos, risk, 0.3f);
                 if (path.size() > 1) {
                     port.pos = path[1];
                     porterBusy = true;
-                    std::cout << "📦 Porter (" << teamName(c.team)
-                        << ") moving to warrior\n";
-                }
-
-                // Resupply when adjacent or same position
-                if (port.pos.manhattan(w.pos) <= 1)
-                {
-                    w.ammo += 15;
-                    w.grenades += 2;
-                    porterBusy = true;
-                    std::cout << "🔫 Porter resupplied warrior: Ammo="
-                        << w.ammo << ", Grenades=" << w.grenades << "\n";
                 }
             }
-            break; // Only resupply one warrior at a time
+            break;
         }
     }
 
     // ========================================
-    // 3. DEFEND - Warriors find cover
+    // 3. WARRIOR TACTICAL MOVEMENT
     // ========================================
+    // Warriors decide: Defend (if low HP/high risk) OR Advance (if healthy) OR Hold position (in combat range)
+    
+    static int moveLogCounter = 0;
+    moveLogCounter++;
+    bool shouldLog = (moveLogCounter % 50 == 0); // Log movement every 50 moves
+    
     for (auto& w : warriors)
     {
         if (!w.alive) continue;
 
-        // Only defend if BOTH low HP AND high risk
         float currentRisk = riskAt(risk, g, w.pos);
-        bool shouldDefend = (w.hp < 25) && (currentRisk > 0.6f);  // Changed from 35 HP and 0.5 risk
-
-        if (shouldDefend)
+        
+        // Check if we're in combat range of an enemy
+        bool inCombatRange = false;
+        int closestEnemyDist = 9999;
+        IVec2 closestEnemy;
+        
+        for (auto enemy : enemySpots) {
+            int dist = w.pos.manhattan(enemy);
+            if (dist < closestEnemyDist) {
+                closestEnemyDist = dist;
+                closestEnemy = enemy;
+            }
+            // Only hold position if ACTUALLY within gun range (can shoot)
+            if (dist <= kGunRange) {
+                inCombatRange = true;
+            }
+        }
+        
+        // PRIORITY 1: Defend if critically low HP or extremely high risk
+        bool criticalDanger = (w.hp <= 25);  // Only retreat if actually low HP, ignore risk
+        
+        if (criticalDanger)
         {
             auto safeOpt = bfsFindSafe(g, w.pos, risk, 0.35f, 8);
 
@@ -180,78 +235,93 @@ void CommanderAI::step(const Grid& g,
                 if (path.size() > 1)
                 {
                     w.pos = path[1];
-                    std::cout << "Shield Warrior moving to cover\n";
                 }
             }
         }
-    }
-
-    // ========================================
-    // 4. ADVANCE - Move toward enemies
-    // ========================================
-    if (!enemySpots.empty())
-    {
-        for (auto& w : warriors)
+        
+        // PRIORITY 2: Stay and fight if in combat range
+        if (inCombatRange && w.ammo > 0 && w.hp > 25)
         {
-            if (!w.alive) continue;
-
-            // Find closest enemy to this warrior
-            IVec2 closestEnemy = enemySpots[0];
-            int minDist = 9999;
-
-            for (auto enemy : enemySpots) {
-                int dist = w.pos.manhattan(enemy);
-                if (dist < minDist) {
-                    minDist = dist;
-                    closestEnemy = enemy;
-                }
+            // Don't log every tick - too spammy
+            continue; // Don't move, stay and shoot
+        }
+        
+        // PRIORITY 3: Advance toward enemies if not in critical danger and not in combat range
+        if (!enemySpots.empty())
+        {
+            // Find home base position
+            IVec2 homeBase = (c.team == Team::Blue) ? IVec2{5, 5} : IVec2{74, 44};
+            int distFromHome = w.pos.manhattan(homeBase);
+            
+            // Warriors can advance up to 60 tiles from home (increased for 80-tile map)
+            bool tooFarFromHome = (distFromHome > 100);  // Allow 100 tiles from home
+            
+            // Advance logic:
+            // - Keep advancing if far away (>9)
+            // - OR if we're out of grenades and not yet in gun range
+            // - OR if totally out of ammo (both bullets and grenades)
+            bool needToCloseIn = (w.grenades == 0 && closestEnemyDist > kGunRange);
+            bool totallyOutOfAmmo = (w.ammo == 0 && w.grenades == 0);
+            // Change: Advance if distance > kGrenadeRange (10) OR if out of grenades and not in gun range
+            bool shouldAdvance = (w.hp > 25) && ((closestEnemyDist > kGrenadeRange) || needToCloseIn || totallyOutOfAmmo);
+            
+            if (tick % 500 == 0) {
+                std::cout << "[MOVE] " << teamName(c.team) << " warrior at (" << w.pos.x << "," << w.pos.y << ")"
+                          << " distToEnemy=" << closestEnemyDist 
+                          << " HP=" << w.hp 
+                          << " Ammo=" << w.ammo
+                          << " Grenades=" << w.grenades
+                          << " distFromHome=" << distFromHome
+                          << " shouldAdvance=" << (shouldAdvance ? "YES" : "NO") << "\n";
             }
-
-            // Advance if healthy OR close to enemy
-            float currentRisk = riskAt(risk, g, w.pos);
-            bool shouldAdvance = (w.hp > 30) || (minDist <= 8);  // More aggressive
-
-            if (shouldAdvance && minDist > 2)  // Don't walk into enemy
+            
+            if (shouldAdvance)
             {
-                auto path = aStarPath(g, w.pos, closestEnemy, risk, 0.2f);  // Less risk-averse
+                auto path = aStarPath(g, w.pos, closestEnemy, risk, 0.3f);
+                if (tick % 500 == 0) {
+                    std::cout << "  -> Path found: " << (path.size() > 1 ? "YES" : "NO") 
+                              << " (size=" << path.size() << ")\n";
+                }
                 if (path.size() > 1)
                 {
                     w.pos = path[1];
-                    std::cout << "Sword Warrior advancing\n";
                 }
             }
         }
     }
     // ========================================
-// 5. COMMANDER COMBAT (Last Resort)
-// ========================================
-
-// Count alive warriors
-    int aliveWarriors = 0;
-    for (auto& w : warriors)
-        if (w.alive) aliveWarriors++;
-
-    // If all warriors are dead, commander fights!
-    if (aliveWarriors == 0 && !enemySpots.empty()) {
-        // Find closest enemy
-        IVec2 closestEnemy = enemySpots[0];
-        int minDist = 9999;
-
-        for (auto enemy : enemySpots) {
-            int dist = c.pos.manhattan(enemy);
-            if (dist < minDist) {
-                minDist = dist;
-                closestEnemy = enemy;
-            }
-        }
-
-        // Commander advances toward enemy
-        if (minDist > 2) {
-            auto path = aStarPath(g, c.pos, closestEnemy, risk, 0.5f);
-            if (path.size() > 1) {
-                c.pos = path[1];
-                std::cout << "[COMMANDER] All warriors dead - engaging enemy!\n";
+    // 5. COMMANDER SURVIVAL (Retreat to Safety)
+    // ========================================
+    
+    // Commander cannot attack per requirements, only move to safety
+    if (!enemySpots.empty()) {
+        float commanderRisk = riskAt(risk, g, c.pos);
+        
+        // If commander is in danger, find safer position
+        if (commanderRisk > 0.5f) {
+            auto safeOpt = bfsFindSafe(g, c.pos, risk, 0.3f, 10);
+            
+            if (safeOpt && *safeOpt != c.pos) {
+                auto path = aStarPath(g, c.pos, *safeOpt, risk, 0.8f);
+                if (path.size() > 1) {
+                    c.pos = path[1];
+                    std::cout << "[COMMANDER] Moving to safer position!\n";
+                }
             }
         }
     }
+    
+    // ========================================
+    // 6. BUILD VISIBILITY MAP
+    // ========================================
+    
+    // Commander combines all soldiers' visibility
+    c.visibilityMap.clear();
+    for (auto& w : warriors) {
+        if (w.alive) {
+            c.visibilityMap.push_back(w.pos);
+        }
+    }
+    if (med.alive) c.visibilityMap.push_back(med.pos);
+    if (port.alive) c.visibilityMap.push_back(port.pos);
 }

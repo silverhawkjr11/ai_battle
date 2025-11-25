@@ -21,5 +21,6 @@ struct CommanderAI {
         std::vector<Warrior>& warriors,
         Medic& med,
         Porter& port,
-        const std::vector<IVec2>& enemySpots);
+        const std::vector<IVec2>& enemySpots,
+        int tick = 0);
 };

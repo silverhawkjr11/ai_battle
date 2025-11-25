@@ -1,4 +1,11 @@
-﻿#include "Game.h"
+﻿// Game.cpp - Main game logic and simulation
+// Implements:
+// - Combat system (shooting and grenades)
+// - Team coordination via CommanderAI
+// - Win condition checking
+// - Agent visibility and perception
+
+#include "Game.h"
 
 #include <algorithm>
 #include <cmath>
@@ -14,10 +21,10 @@ namespace
         return std::abs(a.x - b.x) + std::abs(a.y - b.y);
     }
 
-    constexpr int FIRE_RANGE = 6;
-    constexpr int GRENADE_RANGE = 9;
-    constexpr int FIRE_DAMAGE = 20;
-    constexpr int GRENADE_DAMAGE = 40;
+    constexpr int FIRE_RANGE = 6;      // Gun range: 6 tiles
+    constexpr int GRENADE_RANGE = 10;  // Grenade range: longer than guns for suppression
+    constexpr int FIRE_DAMAGE = 20;    // Bullet damage: 20 (5 shots to kill)
+    constexpr int GRENADE_DAMAGE = 15; // Grenade damage: 15 (less than bullets, for suppression)
 
     // שכנים 4 כיוונים
     std::vector<IVec2> neighbors4(const Grid& g, IVec2 p)
@@ -204,12 +211,18 @@ void Game::step()
 {
     bullets.update(grid);
 
-    if (tick % 100 == 0) {  // Print every 100 ticks
-        std::cout << "=== TICK " << tick << " ===\n";
+    if (tick % 500 == 0) {  // Print every 500 ticks
+        std::cout << "\n=== TICK " << tick << " ===\n";
+        
+        int blueAlive = 0, orangeAlive = 0;
+        for (auto& w : blue.warriors) if (w.alive) blueAlive++;
+        for (auto& w : orange.warriors) if (w.alive) orangeAlive++;
+        
+        std::cout << "Blue: " << blueAlive << " warriors | Orange: " << orangeAlive << " warriors\n";
     }
 
     if (tick > 5000) {
-        std::cout << "Game timeout!\n";
+        std::cout << "\n⏱️ Game TIMEOUT! Draw.\n";
         running = false;
         return;
     }
@@ -221,10 +234,10 @@ void Game::step()
     auto spotsForBlue = enemySpots(Team::Blue);
     auto spotsForOrange = enemySpots(Team::Orange);
     CommanderAI::step(grid, blue.commander, blue.warriors,
-        blue.medic, blue.porter, spotsForBlue);
+        blue.medic, blue.porter, spotsForBlue, tick);
 
     CommanderAI::step(grid, orange.commander, orange.warriors,
-        orange.medic, orange.porter, spotsForOrange);
+        orange.medic, orange.porter, spotsForOrange, tick);
 
     //---------------------------------------------
  //    GRENADE UPDATE + EXPLOSION DAMAGE
@@ -233,12 +246,12 @@ void Game::step()
         {
             auto hit = [&](Agent& A)
                 {
-                    if (!A.alive) return;
+                    if (!A.alive || A.hp <= 0) return;  // Don't damage dead agents
 
                     float dx = A.pos.x - gx;
                     float dy = A.pos.y - gy;
                     if (dx * dx + dy * dy <= radius * radius)
-                        A.takeDamage(40);
+                        A.takeDamage(GRENADE_DAMAGE);
                 };
 
             // פגיעה בכחולים
@@ -258,17 +271,20 @@ void Game::step()
 
 
 
-    // ----------------- ירי של כחולים -----------------
+    // ----------------- Blue team combat -----------------
+    int blueShotsThisTurn = 0;
     for (auto& w : blue.warriors)
     {
         if (!w.alive) continue;
 
         Perception per = w.look(grid, spotsForBlue);
+        
         if (per.seesEnemy)
         {
             IVec2 targetPos = *per.enemyPos;
             int   dist = manhattan(w.pos, targetPos);
 
+            // Priority 1: Shoot if in gun range and have ammo
             if (dist <= FIRE_RANGE && w.ammo > 0)
             {
                 w.ammo--;
@@ -277,38 +293,40 @@ void Game::step()
                     targetPos.x + 0.5f, targetPos.y + 0.5f);
 
                 Agent* victim = findAgentAt(Team::Orange, targetPos);
-                if (victim)
+                if (victim && victim->hp > 0)  // Don't shoot corpses!
                 {
                     victim->takeDamage(FIRE_DAMAGE);
-                    std::cout << "💥 Blue warrior hit Orange "
-                        << victim->role << " hp=" << victim->hp << "\n";
+                    blueShotsThisTurn++;
+                    std::cout << "💥 Blue shot Orange " << victim->role << " (HP:" << victim->hp << ")\n";
                 }
             }
-            else if (dist <= GRENADE_RANGE && w.grenades > 0)
+            // Priority 2: Grenade if out of gun range but within grenade range
+            else if (dist > FIRE_RANGE && dist <= GRENADE_RANGE && w.grenades > 0)
             {
                 w.grenades--;
-                Agent* victim = findAgentAt(Team::Orange, targetPos);
-                if (victim)
-                {
-                    victim->takeDamage(GRENADE_DAMAGE);
-                    std::cout << "💥💥 Blue grenade on Orange "
-                        << victim->role << " hp=" << victim->hp << "\n";
-                }
+                grenades.addGrenade(
+                    w.pos.x + 0.5f, w.pos.y + 0.5f,
+                    targetPos.x + 0.5f, targetPos.y + 0.5f);
+                blueShotsThisTurn++;
+                std::cout << "💣 Blue threw grenade (dist=" << dist << ")!\n";
             }
         }
     }
 
-    // ----------------- ירי של כתומים -----------------
+    // ----------------- Orange team combat -----------------
+    int orangeShotsThisTurn = 0;
     for (auto& w : orange.warriors)
     {
         if (!w.alive) continue;
 
         Perception per = w.look(grid, spotsForOrange);
+        
         if (per.seesEnemy)
         {
             IVec2 targetPos = *per.enemyPos;
             int   dist = manhattan(w.pos, targetPos);
 
+            // Priority 1: Shoot if in gun range and have ammo
             if (dist <= FIRE_RANGE && w.ammo > 0)
             {
                 w.ammo--;
@@ -317,100 +335,31 @@ void Game::step()
                     targetPos.x + 0.5f, targetPos.y + 0.5f);
 
                 Agent* victim = findAgentAt(Team::Blue, targetPos);
-                if (victim)
+                if (victim && victim->hp > 0)  // Don't shoot corpses!
                 {
                     victim->takeDamage(FIRE_DAMAGE);
-                    std::cout << "💥 Orange warrior hit Blue "
-                        << victim->role << " hp=" << victim->hp << "\n";
+                    orangeShotsThisTurn++;
+                    std::cout << "💥 Orange shot Blue " << victim->role << " (HP:" << victim->hp << ")\n";
                 }
             }
-            else if (dist <= GRENADE_RANGE && w.grenades > 0)
+            // Priority 2: Grenade if out of gun range but within grenade range
+            else if (dist > FIRE_RANGE && dist <= GRENADE_RANGE && w.grenades > 0)
             {
                 w.grenades--;
-                Agent* victim = findAgentAt(Team::Blue, targetPos);
-                if (victim)
-                {
-                    victim->takeDamage(GRENADE_DAMAGE);
-                    std::cout << "💥💥 Orange grenade on Blue "
-                        << victim->role << " hp=" << victim->hp << "\n";
-                }
+                grenades.addGrenade(
+                    w.pos.x + 0.5f, w.pos.y + 0.5f,
+                    targetPos.x + 0.5f, targetPos.y + 0.5f);
+                orangeShotsThisTurn++;
+                std::cout << "💣 Orange threw grenade (dist=" << dist << ")!\n";
             }
         }
     }
-    // ----------------- Commander shooting (when warriors are dead) -----------------
-
-// Blue commander combat
-    if (blue.commander.alive) {
-        int blueWarriorsAlive = 0;
-        for (auto& w : blue.warriors) if (w.alive) blueWarriorsAlive++;
-
-        if (blueWarriorsAlive == 0) {
-            Perception per;
-            // Commander uses same vision as warrior
-            for (auto e : spotsForBlue) {
-                if (los(grid, blue.commander.pos, e)) {
-                    per.seesEnemy = true;
-                    per.enemyPos = e;
-                    break;
-                }
-            }
-
-            if (per.seesEnemy && blue.commander.ammo > 0) {
-                IVec2 targetPos = *per.enemyPos;
-                int dist = manhattan(blue.commander.pos, targetPos);
-
-                if (dist <= FIRE_RANGE) {
-                    blue.commander.ammo--;
-                    bullets.addBullet(
-                        blue.commander.pos.x + 0.5f, blue.commander.pos.y + 0.5f,
-                        targetPos.x + 0.5f, targetPos.y + 0.5f);
-
-                    Agent* victim = findAgentAt(Team::Orange, targetPos);
-                    if (victim) {
-                        victim->takeDamage(FIRE_DAMAGE);
-                        std::cout << "💥 Blue COMMANDER hit Orange "
-                            << victim->role << " hp=" << victim->hp << "\n";
-                    }
-                }
-            }
-        }
+    
+    if (tick % 100 == 0 && (blueShotsThisTurn == 0 && orangeShotsThisTurn == 0)) {
+        std::cout << "⚠️ No combat this cycle\n";
     }
-
-    // Orange commander combat
-    if (orange.commander.alive) {
-        int orangeWarriorsAlive = 0;
-        for (auto& w : orange.warriors) if (w.alive) orangeWarriorsAlive++;
-
-        if (orangeWarriorsAlive == 0) {
-            Perception per;
-            for (auto e : spotsForOrange) {
-                if (los(grid, orange.commander.pos, e)) {
-                    per.seesEnemy = true;
-                    per.enemyPos = e;
-                    break;
-                }
-            }
-
-            if (per.seesEnemy && orange.commander.ammo > 0) {
-                IVec2 targetPos = *per.enemyPos;
-                int dist = manhattan(orange.commander.pos, targetPos);
-
-                if (dist <= FIRE_RANGE) {
-                    orange.commander.ammo--;
-                    bullets.addBullet(
-                        orange.commander.pos.x + 0.5f, orange.commander.pos.y + 0.5f,
-                        targetPos.x + 0.5f, targetPos.y + 0.5f);
-
-                    Agent* victim = findAgentAt(Team::Blue, targetPos);
-                    if (victim) {
-                        victim->takeDamage(FIRE_DAMAGE);
-                        std::cout << "💥 Orange COMMANDER hit Blue "
-                            << victim->role << " hp=" << victim->hp << "\n";
-                    }
-                }
-            }
-        }
-    }
+    // NOTE: Commanders CANNOT attack per project requirements
+    // They can only issue orders and move to safer positions
     if (tick % 50 == 0) {  // Every 50 ticks
         int blueAlive = 0, orangeAlive = 0;
         for (auto& w : blue.warriors) if (w.alive) blueAlive++;
@@ -426,7 +375,9 @@ void Game::step()
     for (auto& w : orange.warriors)
         if (w.alive) orangeWarriors++;
 
-    // Check if commanders are alive - COMMANDER DEATH = GAME OVER
+    // Check win conditions:
+    // 1. Commander death = immediate loss
+    // 2. Timeout after 3000 ticks = whoever has more warriors wins
     if (!blue.commander.alive) {
         std::cout << "\n🏆🏆🏆 ORANGE TEAM WINS! 🏆🏆🏆\n";
         std::cout << "Blue Commander eliminated!\n";
@@ -435,6 +386,23 @@ void Game::step()
     else if (!orange.commander.alive) {
         std::cout << "\n🏆🏆🏆 BLUE TEAM WINS! 🏆🏆🏆\n";
         std::cout << "Orange Commander eliminated!\n";
+        std::cout << "Game over - stopping timer\n";
+        running = false;
+    }
+    else if (tick >= 3000) {
+        // Timeout: count surviving warriors
+        if (blueWarriors > orangeWarriors) {
+            std::cout << "\n🏆🏆🏆 BLUE TEAM WINS! 🏆🏆🏆\n";
+            std::cout << "Timeout: Blue has more warriors (" << blueWarriors << " vs " << orangeWarriors << ")\n";
+        }
+        else if (orangeWarriors > blueWarriors) {
+            std::cout << "\n🏆🏆🏆 ORANGE TEAM WINS! 🏆🏆🏆\n";
+            std::cout << "Timeout: Orange has more warriors (" << orangeWarriors << " vs " << blueWarriors << ")\n";
+        }
+        else {
+            std::cout << "\n🤝 DRAW! 🤝\n";
+            std::cout << "Timeout: Both teams have " << blueWarriors << " warriors\n";
+        }
         running = false;
     }
 

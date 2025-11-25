@@ -84,35 +84,57 @@ static void display() {
         drawText(X + 0.1f, Y + 1.05f, std::to_string(a.hp));
         };
 
-    // Blue team
+    // Blue team - show alive in color, dead in gray
     try {
         if (game.blue.commander.alive)
             drawA(game.blue.commander, 0.1f, 0.3f, 1.0f);
+        else
+            drawA(game.blue.commander, 0.4f, 0.4f, 0.4f); // Dead = gray
 
         for (auto& w : game.blue.warriors)
-            if (w.alive) drawA(w, 0.3f, 0.5f, 1.0f);
+            if (!w.alive) 
+                drawA(w, 0.4f, 0.4f, 0.4f); // Dead = gray
+            else if (w.incapacitated)
+                drawA(w, 0.8f, 0.2f, 0.2f); // Incapacitated = red (needs revival!)
+            else
+                drawA(w, 0.3f, 0.5f, 1.0f); // Alive = blue
 
         if (game.blue.medic.alive)
             drawA(game.blue.medic, 0.1f, 0.6f, 1.0f);
+        else
+            drawA(game.blue.medic, 0.4f, 0.4f, 0.4f); // Dead = gray
 
         if (game.blue.porter.alive)
             drawA(game.blue.porter, 0.1f, 0.6f, 1.0f);
+        else
+            drawA(game.blue.porter, 0.4f, 0.4f, 0.4f); // Dead = gray
     }
     catch (...) {}
 
-    // Orange team
+    // Orange team - show alive in color, dead in gray
     try {
         if (game.orange.commander.alive)
             drawA(game.orange.commander, 1.0f, 0.4f, 0.0f);
+        else
+            drawA(game.orange.commander, 0.4f, 0.4f, 0.4f); // Dead = gray
 
         for (auto& w : game.orange.warriors)
-            if (w.alive) drawA(w, 1.0f, 0.6f, 0.1f);
+            if (!w.alive) 
+                drawA(w, 0.4f, 0.4f, 0.4f); // Dead = gray
+            else if (w.incapacitated)
+                drawA(w, 0.8f, 0.2f, 0.2f); // Incapacitated = red (needs revival!)
+            else
+                drawA(w, 1.0f, 0.6f, 0.1f); // Alive = orange
 
         if (game.orange.medic.alive)
             drawA(game.orange.medic, 1.0f, 0.7f, 0.2f);
+        else
+            drawA(game.orange.medic, 0.4f, 0.4f, 0.4f); // Dead = gray
 
         if (game.orange.porter.alive)
             drawA(game.orange.porter, 1.0f, 0.7f, 0.2f);
+        else
+            drawA(game.orange.porter, 0.4f, 0.4f, 0.4f); // Dead = gray
     }
     catch (...) {}
 

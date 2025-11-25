@@ -42,9 +42,11 @@ inline const char* teamName(Team t)
 constexpr int  kSightRange = 10;
 constexpr int  kGunRange = 6;
 constexpr int  kGrenadeRange = 4;
+constexpr int  kGrenadeDamage = 15;       // Reduced from 45-60 to 15
 constexpr int  kMaxHP = 100;
-constexpr int  kLowHPThreshold = 35;
-constexpr int  kMedCallHP = 60;
-constexpr int  kLowAmmo = 5;
+constexpr int  kLowHPThreshold = 25;      // 25% of max HP
+constexpr int  kMedCallHP = 60;           // Call medic if HP below this
+constexpr int  kLowAmmo = 5;              // Low ammo threshold
 constexpr int  kSafeSearchRadius = 8;
 constexpr float kMaxSafeRisk = 0.25f;
+constexpr int  kPorterCooldown = 50;  // Ticks between resupplies
