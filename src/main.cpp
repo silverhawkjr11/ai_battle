@@ -24,8 +24,8 @@ int main(int argc, char* argv[]){
         std::cout << "\n========== AI BATTLE GAME ==========" << std::endl;
         std::cout << "Select configuration:" << std::endl;
         std::cout << "1. Balanced (Equal strength)" << std::endl;
-        std::cout << "2. Blue Advantage (+20 HP, +5 Ammo, +1 Grenade)" << std::endl;
-        std::cout << "3. Orange Advantage (+20 HP, +5 Ammo, +1 Grenade)" << std::endl;
+        std::cout << "2. Blue Advantage (+50 HP, +10 Ammo, +2 Grenades)" << std::endl;
+        std::cout << "3. Orange Advantage (+50 HP, +10 Ammo, +2 Grenades)" << std::endl;
         std::cout << "Enter choice (1-3): ";
         
         int choice;
