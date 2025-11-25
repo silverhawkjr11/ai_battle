@@ -50,3 +50,41 @@ constexpr int  kLowAmmo = 5;              // Low ammo threshold
 constexpr int  kSafeSearchRadius = 8;
 constexpr float kMaxSafeRisk = 0.25f;
 constexpr int  kPorterCooldown = 50;  // Ticks between resupplies
+
+// Game configuration
+struct GameConfig {
+    std::string name;
+    
+    // Team advantages
+    int blueExtraHP = 0;        // Extra HP for Blue warriors
+    int orangeExtraHP = 0;      // Extra HP for Orange warriors
+    int blueExtraAmmo = 0;      // Extra ammo for Blue warriors
+    int orangeExtraAmmo = 0;    // Extra ammo for Orange warriors
+    int blueExtraGrenades = 0;  // Extra grenades for Blue warriors
+    int orangeExtraGrenades = 0; // Extra grenades for Orange warriors
+    
+    // Named configurations
+    static GameConfig Balanced() {
+        GameConfig cfg;
+        cfg.name = "Balanced (Equal teams)";
+        return cfg;
+    }
+    
+    static GameConfig BlueAdvantage() {
+        GameConfig cfg;
+        cfg.name = "Blue Advantage (+20 HP, +5 ammo)";
+        cfg.blueExtraHP = 20;
+        cfg.blueExtraAmmo = 5;
+        cfg.blueExtraGrenades = 1;
+        return cfg;
+    }
+    
+    static GameConfig OrangeAdvantage() {
+        GameConfig cfg;
+        cfg.name = "Orange Advantage (+20 HP, +5 ammo)";
+        cfg.orangeExtraHP = 20;
+        cfg.orangeExtraAmmo = 5;
+        cfg.orangeExtraGrenades = 1;
+        return cfg;
+    }
+};

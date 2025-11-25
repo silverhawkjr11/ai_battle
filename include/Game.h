@@ -37,7 +37,7 @@ struct Game {
     bool running{ true };
     int tick{ 0 };
 
-    Game(const Grid& g);
+    Game(const Grid& g, const GameConfig& config = GameConfig::Balanced());
 
     void step();
 

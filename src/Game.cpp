@@ -166,7 +166,7 @@ namespace
     }
 }
 
-Game::Game(const Grid& g)
+Game::Game(const Grid& g, const GameConfig& config)
     : grid(g)
     , blue(Team::Blue, g,
         IVec2{ 2, 2 },
@@ -178,7 +178,21 @@ Game::Game(const Grid& g)
         IVec2{ g.w - 4, g.h - 6 },
         IVec2{ g.w - 3, g.h - 4 },
         IVec2{ g.w - 3, g.h - 6 })
-{}
+{
+    // Apply configuration to Blue team
+    for (auto& w : blue.warriors) {
+        w.hp = kMaxHP + config.blueExtraHP;
+        w.ammo = 20 + config.blueExtraAmmo;
+        w.grenades = 2 + config.blueExtraGrenades;
+    }
+    
+    // Apply configuration to Orange team
+    for (auto& w : orange.warriors) {
+        w.hp = kMaxHP + config.orangeExtraHP;
+        w.ammo = 20 + config.orangeExtraAmmo;
+        w.grenades = 2 + config.orangeExtraGrenades;
+    }
+}
 
 std::vector<IVec2> Game::enemySpots(Team t) const
 {
