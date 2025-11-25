@@ -377,7 +377,30 @@ void Game::step()
 
     // Check win conditions:
     // 1. Commander death = immediate loss
-    // 2. Timeout after 3000 ticks = whoever has more warriors wins
+    // 2. Stalemate detection: if nothing changes for 500 ticks
+    static int lastBlueWarriors = blueWarriors;
+    static int lastOrangeWarriors = orangeWarriors;
+    static int lastBlueHP = 0, lastOrangeHP = 0;
+    static int stalemateTicks = 0;
+    
+    // Calculate total HP for both teams
+    int currentBlueHP = 0, currentOrangeHP = 0;
+    for (auto& w : blue.warriors) if (w.alive) currentBlueHP += w.hp;
+    for (auto& w : orange.warriors) if (w.alive) currentOrangeHP += w.hp;
+    
+    // Check if anything changed
+    if (blueWarriors == lastBlueWarriors && orangeWarriors == lastOrangeWarriors &&
+        currentBlueHP == lastBlueHP && currentOrangeHP == lastOrangeHP) {
+        stalemateTicks++;
+    } else {
+        stalemateTicks = 0;
+        lastBlueWarriors = blueWarriors;
+        lastOrangeWarriors = orangeWarriors;
+        lastBlueHP = currentBlueHP;
+        lastOrangeHP = currentOrangeHP;
+    }
+    
+    // Check win conditions
     if (!blue.commander.alive) {
         std::cout << "\n🏆🏆🏆 ORANGE TEAM WINS! 🏆🏆🏆\n";
         std::cout << "Blue Commander eliminated!\n";
@@ -389,8 +412,34 @@ void Game::step()
         std::cout << "Game over - stopping timer\n";
         running = false;
     }
-    else if (tick >= 3000) {
-        // Timeout: count surviving warriors
+    else if (stalemateTicks >= 500) {
+        // Stalemate: count surviving warriors and HP
+        std::cout << "\n⚖️ STALEMATE DETECTED (no changes for 500 ticks) ⚖️\n";
+        if (blueWarriors > orangeWarriors) {
+            std::cout << "\n🏆🏆🏆 BLUE TEAM WINS! 🏆🏆🏆\n";
+            std::cout << "Blue has more warriors (" << blueWarriors << " vs " << orangeWarriors << ")\n";
+        }
+        else if (orangeWarriors > blueWarriors) {
+            std::cout << "\n🏆🏆🏆 ORANGE TEAM WINS! 🏆🏆🏆\n";
+            std::cout << "Orange has more warriors (" << orangeWarriors << " vs " << blueWarriors << ")\n";
+        }
+        else if (currentBlueHP > currentOrangeHP) {
+            std::cout << "\n🏆🏆🏆 BLUE TEAM WINS! 🏆🏆🏆\n";
+            std::cout << "Blue has more total HP (" << currentBlueHP << " vs " << currentOrangeHP << ")\n";
+        }
+        else if (currentOrangeHP > currentBlueHP) {
+            std::cout << "\n🏆🏆🏆 ORANGE TEAM WINS! 🏆🏆🏆\n";
+            std::cout << "Orange has more total HP (" << currentOrangeHP << " vs " << currentBlueHP << ")\n";
+        }
+        else {
+            std::cout << "\n🤝 DRAW! 🤝\n";
+            std::cout << "Both teams equal: " << blueWarriors << " warriors, " << currentBlueHP << " HP\n";
+        }
+        running = false;
+    }
+    else if (tick >= 5000) {
+        // Absolute timeout failsafe
+        std::cout << "\n⏰ ABSOLUTE TIMEOUT (5000 ticks) ⏰\n";
         if (blueWarriors > orangeWarriors) {
             std::cout << "\n🏆🏆🏆 BLUE TEAM WINS! 🏆🏆🏆\n";
             std::cout << "Timeout: Blue has more warriors (" << blueWarriors << " vs " << orangeWarriors << ")\n";
