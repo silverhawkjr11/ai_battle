@@ -7,6 +7,7 @@
 // - Visibility map construction
 
 #include "CommanderAI.h"
+#include "Visibility.h"
 #include <algorithm>
 #include <iostream>
 
@@ -36,12 +37,12 @@ void CommanderAI::step(const Grid& g,
         for (auto& w : warriors)
         {
             // Check incapacitated warriors first (HP = 0) - PRIORITY!
-            if (w.alive && w.incapacitated) {
+            if (w.incapacitated) {
                 targetWarrior = &w;
                 lowestHP = 0;
                 break; // Reviving is top priority
             }
-            
+
             // Otherwise check injured warriors
             if (!w.alive) continue;
             if (w.hp < lowestHP) {
@@ -88,8 +89,18 @@ void CommanderAI::step(const Grid& g,
             
             for (auto& w : warriors)
             {
+                // Prioritize incapacitated warriors even though alive=false
+                if (w.incapacitated) {
+                    int dist = med.pos.manhattan(w.pos);
+                    if (dist < minDist) {
+                        minDist = dist;
+                        patient = &w;
+                    }
+                    continue;
+                }
+
                 if (!w.alive || w.hp >= 60) continue;
-                
+
                 int dist = med.pos.manhattan(w.pos);
                 if (dist < minDist) {
                     minDist = dist;
@@ -221,15 +232,16 @@ void CommanderAI::step(const Grid& g,
         bool inCombatRange = false;
         int closestEnemyDist = 9999;
         IVec2 closestEnemy;
-        
+
         for (auto enemy : enemySpots) {
             int dist = w.pos.manhattan(enemy);
             if (dist < closestEnemyDist) {
                 closestEnemyDist = dist;
                 closestEnemy = enemy;
             }
+            bool hasLOS = los(g, w.pos, enemy);
             // Only hold position if ACTUALLY within gun range (can shoot)
-            if (dist <= kGunRange) {
+            if (dist <= kGunRange && hasLOS) {
                 inCombatRange = true;
             }
         }

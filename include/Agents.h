@@ -31,18 +31,19 @@ struct Agent {
     void takeDamage(int dmg) {
         if (!alive) return;
         hp -= dmg;
-        if (hp <= 0) { 
-            hp = 0; 
-            incapacitated = true; // Can be revived by medic
-            // Don't set alive = false yet - medic can still revive
+        if (hp <= 0) {
+            hp = 0;
+            incapacitated = true; // Knocked out but can be revived by medic
+            alive = false;         // Remove from active play until revived
         }
     }
-    
+
     void revive(int healAmount) {
-        if (!alive) return; // Truly dead agents can't be revived
+        if (!incapacitated) return; // Only knocked-out agents can be revived
         hp = healAmount;
         if (hp > 0) {
             incapacitated = false;
+            alive = true;
         }
     }
 };
