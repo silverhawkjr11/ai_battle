@@ -152,5 +152,8 @@
     <ClInclude Include="include\Types.h" />
     <ClInclude Include="include\Visibility.h" />
   </ItemGroup>
+  <ItemGroup>
+    <None Include="README.md" />
+  </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
 </Project>
