@@ -62,11 +62,3 @@ Contributions welcome. Suggested workflow:
 1. Fork the repository.
 2. Create a feature branch.
 3. Submit a pull request with a clear description and tests/logs if applicable.
-
-License
--------
-No license file is included in this repository by default; check for a `LICENSE` file or add one before publishing.
-
-Contact / further help
-----------------------
-Open an issue in the repository with logs from `game_debug.log` and `game_log.txt` if you want help reproducing or diagnosing behaviors (zig-zagging, stalemates, revive/resupply loops).
