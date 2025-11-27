@@ -72,31 +72,3 @@ TEAM Orange
  Porter: pos=(69,44) HP=100 alive=1
  Warrior0: pos=(42,27) HP=5 Ammo=20 Grenades=2 alive=1 inc=0 revives=1 resupplies=0
  Warrior1: pos=(49,22) HP=0 Ammo=20 Grenades=0 alive=1 inc=1 revives=1 resupplies=0
-
-========== TICK 500 ==========
-TEAM Blue
- Commander: pos=(2,2) HP=100 alive=1
- Medic: pos=(45,9) HP=100 alive=1 state=2
- Porter: pos=(10,6) HP=100 alive=1
- Warrior0: pos=(47,13) HP=0 Ammo=20 Grenades=2 alive=1 inc=1 revives=1 resupplies=0
- Warrior1: pos=(46,29) HP=20 Ammo=0 Grenades=0 alive=1 inc=0 revives=1 resupplies=0
-TEAM Orange
- Commander: pos=(77,47) HP=100 alive=1
- Medic: pos=(72,29) HP=85 alive=1 state=0
- Porter: pos=(69,44) HP=100 alive=1
- Warrior0: pos=(54,29) HP=100 Ammo=0 Grenades=0 alive=1 inc=0 revives=1 resupplies=0
- Warrior1: pos=(49,22) HP=0 Ammo=20 Grenades=0 alive=0 inc=0 revives=1 resupplies=0
-
-========== TICK 600 ==========
-TEAM Blue
- Commander: pos=(2,2) HP=100 alive=1
- Medic: pos=(0,35) HP=100 alive=1 state=0
- Porter: pos=(10,6) HP=100 alive=1
- Warrior0: pos=(47,13) HP=0 Ammo=20 Grenades=2 alive=0 inc=0 revives=1 resupplies=0
- Warrior1: pos=(0,36) HP=100 Ammo=9 Grenades=0 alive=1 inc=0 revives=1 resupplies=0
-TEAM Orange
- Commander: pos=(77,47) HP=100 alive=1
- Medic: pos=(72,32) HP=85 alive=1 state=1
- Porter: pos=(69,44) HP=100 alive=1
- Warrior0: pos=(6,35) HP=20 Ammo=0 Grenades=1 alive=1 inc=0 revives=1 resupplies=0
- Warrior1: pos=(49,22) HP=0 Ammo=20 Grenades=0 alive=0 inc=0 revives=1 resupplies=0
