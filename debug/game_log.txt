@@ -1,0 +1,32 @@
+=== AI BATTLE DETAILED LOG ===
+Generated: Nov 25 2025 19:40:14
+==============================
+
+
+========== TICK 0 ==========
+TEAM Blue
+ Commander: pos=(2,2) HP=100 alive=1
+ Medic: pos=(2,4) HP=100 alive=1 state=0
+ Porter: pos=(2,6) HP=100 alive=1
+ Warrior0: pos=(3,2) HP=100 Ammo=20 Grenades=2 alive=1 inc=0 revives=0 resupplies=0
+ Warrior1: pos=(3,6) HP=100 Ammo=20 Grenades=2 alive=1 inc=0 revives=0 resupplies=0
+TEAM Orange
+ Commander: pos=(45,6) HP=100 alive=1
+ Medic: pos=(45,5) HP=100 alive=1 state=0
+ Porter: pos=(45,3) HP=100 alive=1
+ Warrior0: pos=(43,5) HP=100 Ammo=20 Grenades=2 alive=1 inc=0 revives=0 resupplies=0
+ Warrior1: pos=(43,3) HP=100 Ammo=20 Grenades=2 alive=1 inc=0 revives=0 resupplies=0
+
+========== TICK 100 ==========
+TEAM Blue
+ Commander: pos=(2,2) HP=100 alive=1
+ Medic: pos=(20,6) HP=100 alive=1 state=3
+ Porter: pos=(2,6) HP=100 alive=1
+ Warrior0: pos=(22,6) HP=100 Ammo=19 Grenades=0 alive=1 inc=0 revives=0 resupplies=0
+ Warrior1: pos=(30,6) HP=30 Ammo=0 Grenades=0 alive=1 inc=0 revives=1 resupplies=0
+TEAM Orange
+ Commander: pos=(45,6) HP=100 alive=1
+ Medic: pos=(46,6) HP=100 alive=1 state=2
+ Porter: pos=(45,3) HP=100 alive=1
+ Warrior0: pos=(38,6) HP=20 Ammo=17 Grenades=0 alive=1 inc=0 revives=1 resupplies=0
+ Warrior1: pos=(37,2) HP=25 Ammo=20 Grenades=0 alive=1 inc=0 revives=0 resupplies=0
